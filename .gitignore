@@ -7,3 +7,5 @@ src/data/configs/*
 
 src/data/models/*
 !src/data/models/.gitkeep
+
+__pycache__
