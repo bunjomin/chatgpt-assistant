@@ -1,0 +1,9 @@
+venv
+src/data/checkpoints/*
+!src/data/checkpoints/.gitkeep
+
+src/data/configs/*
+!src/data/configs/.gitkeep
+
+src/data/models/*
+!src/data/models/.gitkeep
