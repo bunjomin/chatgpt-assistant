@@ -52,28 +52,19 @@ class ChatGPT:
         }
         try:
             r = requests.post(f"{ChatGPT.__API_BASE}/chat/completions", headers=self.headers, json=body)
-        except requests.ConnectionError:
-            raise KeyboardInterrupt
-        except requests.Timeout:
-            raise KeyboardInterrupt
-        if r.status_code == 200:
-            response = r.json()
-            message_response = response["choices"][0]["message"]
-            if not message_response or not message_response["content"]: return None
-            self.messages.append({
-                "role": "assistant",
-                "content": message_response["content"],
-            })
-            return message_response["content"]
-        elif r.status_code == 400:
-            raise EOFError
-        elif r.status_code == 401:
-            print(r.json())
-            raise EOFError
-        elif r.status_code == 429:
-            raise KeyboardInterrupt
-        elif r.status_code == 502 or r.status_code == 503:
-            raise KeyboardInterrupt
-        else:
-            raise EOFError
+        # Brutally stupid.
+        except Exception:
+            return "Something went wrong. Please try again."
+        if r.status_code != 200: return "Something went wrong. Please try again."
 
+        response = r.json()
+        message_response = response["choices"][0]["message"]
+        if not message_response or not message_response["content"]: return None
+        self.messages.append({
+            "role": "assistant",
+            "content": message_response["content"],
+        })
+        return message_response["content"]
+
+    def reset(self):
+        self.messages = copy.copy(self.__context_messages)
