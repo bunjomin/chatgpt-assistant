@@ -1,7 +1,7 @@
-import queue
 import sys
 import sounddevice as sd
 import json
+import asyncio
 
 from typing import List, Callable
 from vosk import Model, KaldiRecognizer
@@ -10,18 +10,16 @@ class SpeechRecognizer:
     """Input class for handling audio input"""
 
     def __init__(self) -> None:
-        self.q = queue.Queue()
-        try:
-            default_input_device = sd.default.device[0]
-            device_info = sd.query_devices(default_input_device, "input")
-            sample_rate = int(device_info["default_samplerate"])
-            
-            self.model = Model(lang="en-us")
-            self._input_stream = sd.RawInputStream(samplerate=sample_rate, blocksize=8000, dtype="int16", channels=1, callback=self._callback)
-            self.rec = KaldiRecognizer(self.model, sample_rate)
-            self._listen = False
-            self._capturing = False
-        except Exception: pass
+        self.q = asyncio.Queue()
+        default_input_device = sd.default.device[0]
+        device_info = sd.query_devices(default_input_device, "input")
+        sample_rate = int(device_info["default_samplerate"])
+        
+        self.model = Model(lang="en-us")
+        self._input_stream = sd.RawInputStream(samplerate=sample_rate, blocksize=8000, dtype="int16", channels=1, callback=self._callback)
+        self.rec = KaldiRecognizer(self.model, sample_rate)
+        self._capturing = False
+        self._loop = None
 
     def _int_or_str(self, text):
         """Helper function for argument parsing."""
@@ -34,26 +32,25 @@ class SpeechRecognizer:
         """This is called (from a separate thread) for each audio block."""
         if status:
             print(status, file=sys.stderr)
-        self.q.put(bytes(indata))
-
-    def is_active(self):
-        return self._listen
+        b = bytes(indata)
+        loop = self._loop
+        asyncio.run_coroutine_threadsafe(self.q.put(b), loop)
 
     def kill(self):
-        try:
-            self._listen = False
-            self._input_stream.abort()
-        except Exception: pass
+        print("Killing speech recognizer...")
+        self._capturing = False
+        self._input_stream.abort()
 
     def is_capturing(self):
         return self._capturing
 
-    def start(self, subscribers: List[Callable]):
-        self._listen = True
-        self._input_stream.start()
-        while self._listen:
-            try:
-                data = self.q.get()
+    async def start(self, subscribers: List[Callable]):
+        print("ASR starting...")
+        try:
+            self._loop = asyncio.get_event_loop()
+            self._input_stream.start()
+            while True:
+                data = await self.q.get()
                 if not data:
                     self._capturing = False
                     continue
@@ -67,7 +64,7 @@ class SpeechRecognizer:
                         continue
 
                     for sub in subscribers:
-                        sub(text)
+                        await sub(text)
                 else:
                     d = self.rec.PartialResult()
                     parsed = json.loads(d)
@@ -82,5 +79,11 @@ class SpeechRecognizer:
                         self._capturing = False
                         continue
                     self._capturing = True
-            except Exception:
-                continue
+        except asyncio.CancelledError as e:
+            print(f"asr asyncio.CancelledError: {e}")
+            self.kill()
+            return
+        except Exception as e:
+            print(f"asr Exception: {e}")
+            self.kill()
+            return

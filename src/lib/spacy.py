@@ -1,3 +1,5 @@
+# CURRENTLY UNUSED, BUT THIS MIGHT BE USEFUL ONE DAY
+
 import os
 import spacy
 

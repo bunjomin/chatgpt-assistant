@@ -27,8 +27,8 @@ class Audio:
             audio_data = np.clip(adjusted_audio, -1.0, 1.0)
 
         # Play the audio
-        sd.play(audio_data, samplerate=sample_rate)
-        sd.wait()
+        sd.play(audio_data, samplerate=sample_rate, blocking=True)
+        return
 
     @staticmethod
     def play_sound_file(filename, extension="wav"):
@@ -45,3 +45,4 @@ class Audio:
         sample_rate = wf.getframerate()
 
         Audio.play_audio(audio_array, sample_rate, 0.6)
+        return
