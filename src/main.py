@@ -11,6 +11,8 @@ from dotenv import load_dotenv
 
 from lib.sound import Audio
 from lib.speech_recognition import SpeechRecognizer
+from lib.chatgpt import ChatGPT
+from lib.tts import TTS
 
 load_dotenv()
 
@@ -47,45 +49,35 @@ class Assistant:
 
     def __init__(self):
         self._awake = False
-        api_key = os.environ.get('ASSISTANT_API_KEY')
-        self._api_base = os.environ.get('ASSISTANT_API_BASE')
+        api_key = os.environ.get('OPENAI_API_KEY')
         self._api_key = api_key
         self.speech_recognizer = SpeechRecognizer()
         self._last_speech_timestamp = None
         self.current_conversation = []
+        self.tts = TTS()
+        self.chat_gpt = ChatGPT({ "api_key": self._api_key })
 
     async def chat(self, text):
         try:
             self._last_speech_timestamp = None
             self.speech_recognizer.pause()
+            response = await asyncio.to_thread(self.chat_gpt.chat, text)
+
+            if not isinstance(response, str) or not response or not len(response):
+                self._last_speech_timestamp = round(time.time(), 2)
+                self.speech_recognizer.resume()
+                return
+
             self.current_conversation.append({
                 "role": "user",
                 "content": text,
             })
-            body = { "messages": self.current_conversation }
-            headers = { "authorization": f"bearer {self._api_key}" }
-            raw_response = requests.post(f"{self._api_base}/tts", json=body, headers=headers)
-            raw_response.raise_for_status()
-            raw_response_text = raw_response.headers.get("x-response")
-            response_text = base64.b64decode(raw_response_text).decode("utf-8")
-            print(f"received response: {response_text}")
-            if not response_text or not len(response_text):
-                self._last_speech_timestamp = round(time.time(), 2)
-                return
-            wav_data = io.BytesIO(raw_response.content)
-            with wave.open(wav_data, "rb") as wf:
-                sample_width = wf.getsampwidth() * 8
-                print(f"sample_width: {sample_width}")
-                n_frames = wf.getnframes()
-                audio_data = wf.readframes(n_frames)
-                audio_array = np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32767.0  # Convert to float32
-                sample_rate = wf.getframerate()
 
-            await asyncio.to_thread(Audio.play_audio, audio_array, sample_rate, 0.6)
+            await asyncio.to_thread(self.tts.text_to_speech, response)
 
             self.current_conversation.append({
                 "role": "assistant",
-                "content": response_text,
+                "content": response,
             })
 
             self.speech_recognizer.resume()

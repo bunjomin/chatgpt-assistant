@@ -1,68 +1,48 @@
 import os
-import asyncio
 import requests
-import zipfile
+import sounddevice as sd
 import torch
 
-from TTS.api import TTS as TextToSpeech
-
-from lib.sound import Audio
-
-device = "cpu" if torch.cuda.is_available() else "cpu"
+from piper import PiperVoice
 
 _DIR = os.path.dirname(os.path.abspath(__file__))
 
 class TTS:
-    class _URLS:
-        VITS = "https://github.com/coqui-ai/TTS/releases/download/v0.6.1_models/tts_models--en--ljspeech--vits.zip"
-
     class _PATHS:
         MODELS = os.path.normpath(os.path.join(_DIR, "../data/models"))
-        VITS = os.path.normpath(os.path.join(_DIR, "../data/models/vits"))
+        AMY = os.path.normpath(os.path.join(_DIR, "../data/models/amy"))
 
-    def _ensure_model(self):
-        if not os.path.exists(self._PATHS.VITS):
+    class _URLS:
+        AMY_MODEL = "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/amy/medium/en_US-amy-medium.onnx"
+        AMY_CONFIG = "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/amy/medium/en_US-amy-medium.onnx.json"
+
+    def _ensure_files(self):
+        if not os.path.exists(self._PATHS.AMY):
+            os.makedirs(self._PATHS.AMY)
+        if not os.path.exists(os.path.normpath(os.path.join(self._PATHS.AMY, "en_US-amy-medium.onnx"))) or not os.path.exists(os.path.normpath(os.path.join(self._PATHS.AMY, "config.json"))):
             self.download_and_unzip()
 
     def __init__(self):
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self._ensure_files()
+        model_path = os.path.normpath(os.path.join(self._PATHS.AMY, "en_US-amy-medium.onnx"))
+        config_path = os.path.normpath(os.path.join(self._PATHS.AMY, "config.json"))
 
-        self._ensure_model()
-
-        model_path = os.path.normpath(os.path.join(self._PATHS.VITS, "model_file.pth"))
-        model_config = os.path.normpath(os.path.join(self._PATHS.VITS, "config.json"))
-
-        self.tts = TextToSpeech(model_path=model_path, config_path=model_config, progress_bar=False).to(self.device)
-        TextToSpeech()
+        self.tts = PiperVoice.load(model_path, config_path, use_cuda=torch.cuda.is_available())
     
     def download_and_unzip(self):
-        """
-        Download and unzip a zip file.
-        
-        :param url: The URL of the zip file.
-        :param dest_folder: The destination folder where the content should be unzipped.
-        """
-        response = requests.get(self._URLS.VITS, stream=True)
-        zip_path = os.path.join(self._PATHS.MODELS, "temp.zip")
-        with open(zip_path, 'wb') as file:
+        response = requests.get(self._URLS.AMY_MODEL, stream=True)
+        with open(os.path.normpath(os.path.join(self._PATHS.AMY, "en_US-amy-medium.onnx")), 'wb') as file:
             for chunk in response.iter_content(chunk_size=128):
                 file.write(chunk)
-        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            zip_ref.extractall(self._PATHS.MODELS)
-        os.remove(zip_path)
-        os.rename(os.path.join(self._PATHS.MODELS, "tts_models--en--ljspeech--vits"), self._PATHS.VITS)
+        response = requests.get(self._URLS.AMY_CONFIG, stream=True)
+        with open(os.path.normpath(os.path.join(self._PATHS.AMY, "config.json")), 'wb') as file:
+            for chunk in response.iter_content(chunk_size=128):
+                file.write(chunk)
 
-    async def text_to_speech(self, text, play=True):
-        wav = self.tts.tts(text)
-        if play:
-            await asyncio.to_thread(Audio.play_audio, wav, 22050, 0.6)
-        else:
-            return wav
-        # q = asyncio.Queue()
-        # for chunk in chunk_words(text, 12, 6):
-        #     wav = self.tts.tts(chunk)
-        #     q.put_nowait(wav)
-        # while not q.empty():
-        #     wav = await q.get()
-        #     if not wav: continue
-        #     await asyncio.to_thread(Audio.play_audio, wav, 22050, 0.6)
+    def text_to_speech(self, text):
+        stream = sd.RawOutputStream(samplerate=22050, dtype="int16", channels=1)
+        stream.start()
+        for bytes in self.tts.synthesize_stream_raw(text):
+            stream.write(bytes)
+        stream.close()
+        return
