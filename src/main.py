@@ -9,6 +9,7 @@ from lib.sound import Audio
 from lib.speech_recognition import SpeechRecognizer
 from lib.chatgpt import ChatGPT
 from lib.tts import TTS
+from lib.spacy import chunk_words
 
 load_dotenv()
 os.environ['PA_ALSA_PLUGHW'] = '1'
@@ -70,7 +71,8 @@ class Assistant:
                 "content": text,
             })
 
-            await asyncio.to_thread(self.tts.text_to_speech, response)
+            for chunk in chunk_words(response, 16, 4):
+                await asyncio.to_thread(self.tts.text_to_speech, chunk)
 
             self.current_conversation.append({
                 "role": "assistant",
@@ -106,7 +108,6 @@ class Assistant:
         await self.chat(text)
 
     async def handle_asleep(self, text):
-        print(f"sleep text: {text}")
         for quit_phrase in self._QUIT_PHRASES:
             if Assistant.jaccard_similarity(quit_phrase, text) > self._SIMILARITY_THRESHOLD:
                 await self.quit()
