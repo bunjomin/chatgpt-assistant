@@ -43,6 +43,13 @@ class SpeechRecognizer:
 
     def is_capturing(self):
         return self._capturing
+    
+    def pause(self):
+        self._capturing = False
+        self._input_stream.stop()
+
+    def resume(self):
+        self._input_stream.start()
 
     async def start(self, subscribers: List[Callable]):
         print("ASR starting...")

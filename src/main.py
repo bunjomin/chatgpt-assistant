@@ -54,6 +54,7 @@ class Assistant:
     async def chat(self, text):
         try:
             self._last_speech_timestamp = None
+            self.speech_recognizer.pause()
             self.current_conversation.append({
                 "role": "user",
                 "content": text,
@@ -84,6 +85,7 @@ class Assistant:
                 "content": response_text,
             })
 
+            self.speech_recognizer.resume()
             await asyncio.to_thread(Audio.play_sound_file, "awake")
             self._last_speech_timestamp = round(time.time(), 2)
 
