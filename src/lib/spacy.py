@@ -1,15 +1,6 @@
-# CURRENTLY UNUSED, BUT THIS MIGHT BE USEFUL ONE DAY
-
-import os
 import spacy
 
-dir = os.path.dirname(os.path.abspath(__file__))
-model_path = os.path.normpath(os.path.join(dir, "../data/models/en_core_web_sm"))
-if not os.path.exists(model_path) or not os.path.isdir(model_path):
-    print(f"Downloading spaCy model to {model_path}")
-    os.makedirs(model_path)
-    os.system(f"python -m spacy download en_core_web_sm --direct --destination {model_path}")
-nlp = spacy.load(model_path)
+nlp = spacy.load("en_core_web_sm")
 
 def clamp(value, minimum, maximum):
     return max(min(value, maximum), minimum)
