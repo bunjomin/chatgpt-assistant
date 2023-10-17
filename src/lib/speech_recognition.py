@@ -7,14 +7,16 @@ import asyncio
 from typing import List, Callable
 from vosk import Model, KaldiRecognizer, SetLogLevel
 
+
 class HiddenPrints:
     def __enter__(self):
         self._original_stdout = sys.stdout
-        sys.stdout = open(os.devnull, 'w')
+        sys.stdout = open(os.devnull, "w")
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         sys.stdout.close()
         sys.stdout = self._original_stdout
+
 
 class SpeechRecognizer:
     """Input class for handling audio input"""
@@ -28,7 +30,13 @@ class SpeechRecognizer:
         self._loop = None
         SetLogLevel(-1)
         self.model = Model(lang="en-us")
-        self._input_stream = sd.RawInputStream(samplerate=sample_rate, blocksize=8000, dtype="int16", channels=1, callback=self._callback)
+        self._input_stream = sd.RawInputStream(
+            samplerate=sample_rate,
+            blocksize=8000,
+            dtype="int16",
+            channels=1,
+            callback=self._callback,
+        )
         self.rec = KaldiRecognizer(self.model, sample_rate)
 
     def _int_or_str(self, text):
@@ -53,7 +61,7 @@ class SpeechRecognizer:
 
     def is_capturing(self):
         return self._capturing
-    
+
     def pause(self):
         self._capturing = False
         self._input_stream.stop()

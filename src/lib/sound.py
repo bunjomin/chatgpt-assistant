@@ -3,8 +3,8 @@ import numpy as np
 import os
 import wave
 
-class Audio:
 
+class Audio:
     @staticmethod
     def play_audio(audio, sample_rate=22050, volume=1.0):
         # Ensure audio is in the correct float32 format with values between -1 and 1
@@ -18,7 +18,9 @@ class Audio:
                     adjusted_audio = np.float32(n * volume)
                     audio_data.append(np.clip(np.array([adjusted_audio]), -1.0, 1.0))
                 elif isinstance(n, int):
-                    float_val = np.float32(n / float(2**15))  # Convert 16-bit int to float between -1 and 1
+                    float_val = np.float32(
+                        n / float(2**15)
+                    )  # Convert 16-bit int to float between -1 and 1
                     adjusted_audio = np.float32(float_val * volume)
                     audio_data.append(np.clip(np.array([adjusted_audio]), -1.0, 1.0))
             audio_data = np.concatenate(audio_data)
@@ -33,13 +35,17 @@ class Audio:
     @staticmethod
     def play_sound_file(filename, extension="wav"):
         dir = os.path.dirname(os.path.abspath(__file__))
-        file_path = os.path.normpath(os.path.join(dir, "../assets/", f"{filename}.{extension}"))
-        wf = wave.open(file_path, 'rb')
+        file_path = os.path.normpath(
+            os.path.join(dir, "../assets/", f"{filename}.{extension}")
+        )
+        wf = wave.open(file_path, "rb")
 
         # Read the entire audio data
         n_frames = wf.getnframes()
         audio_data = wf.readframes(n_frames)
-        audio_array = np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32767.0  # Convert to float32
+        audio_array = (
+            np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32767.0
+        )  # Convert to float32
 
         # Get the sample rate
         sample_rate = wf.getframerate()
