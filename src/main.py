@@ -59,22 +59,23 @@ class Assistant:
         try:
             self._last_speech_timestamp = None
             self.speech_recognizer.pause()
-            response = None
-
+            full_response = ""
             chunks = []
             async for chunk in self.chat_gpt.chat(text):
                 chunks.append(chunk)
                 if chunk.strip().endswith(",") or chunk.strip().endswith(".") or chunk.strip().endswith(";"):
                     joined = ''.join(chunks)
                     print(f"playing segment: {joined}")
-                    self.tts.text_to_speech(joined)
-                    chunks.clear()
+                    await asyncio.to_thread(self.tts.text_to_speech, joined)
+                    full_response += joined
+                    chunks = []
         
             if len(chunks) > 0:
                 joined = ''.join(chunks)
                 print(f"playing final segment: {joined}")
-                self.tts.text_to_speech(joined)
-                chunks.clear()
+                await asyncio.to_thread(self.tts.text_to_speech, joined)
+                full_response += joined
+                chunks = []
 
             self.current_conversation.append({
                 "role": "user",
@@ -83,7 +84,7 @@ class Assistant:
 
             self.current_conversation.append({
                 "role": "assistant",
-                "content": response,
+                "content": full_response,
             })
 
             await self.resume()

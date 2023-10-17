@@ -55,12 +55,14 @@ class ChatGPT:
         
         headers = self.headers
 
+        print(f"requesting completion for: {self.messages[-1].get('content')}")
+
         async with aiohttp.ClientSession() as session:
             async with session.post(f"{ChatGPT.__API_BASE}/chat/completions", headers=headers, json=body) as res:
                 try:
                     if not res.content:
                         raise ValueError("No response body")
-                    
+
                     chunks = []
                     async for chunk in res.content.iter_any():
                         stringed = chunk.decode()
@@ -81,6 +83,10 @@ class ChatGPT:
                             if not parsed:
                                 continue
                             if parsed.get("choices", [{}])[0].get("finish_reason", None) is not None:
+                                self.messages.append({
+                                    "role": "assistant",
+                                    "content": "".join(chunks)
+                                })
                                 break
                             delta = parsed.get("choices", [{}])[0].get("delta", {}).get("content", None)
                             if not delta:
