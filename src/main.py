@@ -3,6 +3,7 @@ import time
 import sys
 import asyncio
 import numpy as np
+import re
 from dotenv import load_dotenv
 
 from lib.sound import Audio
@@ -63,12 +64,13 @@ class Assistant:
             chunks = []
             async for chunk in self.chat_gpt.chat(text):
                 chunks.append(chunk)
-                if chunk.strip().endswith(",") or chunk.strip().endswith(".") or chunk.strip().endswith(";"):
-                    joined = ''.join(chunks)
-                    print(f"playing segment: {joined}")
-                    await asyncio.to_thread(self.tts.text_to_speech, joined)
-                    full_response += joined
-                    chunks = []
+                if len(chunks) > 3 and not re.match(r"\d+[.,]$", chunk.strip()) and not re.match(r"\d+[.,]$", chunks[-1].strip()):
+                    if chunk.strip().endswith(",") or chunk.strip().endswith(".") or chunk.strip().endswith(";"):
+                        joined = ''.join(chunks)
+                        print(f"playing segment: {joined}")
+                        await asyncio.to_thread(self.tts.text_to_speech, joined)
+                        full_response += joined
+                        chunks = []
         
             if len(chunks) > 0:
                 joined = ''.join(chunks)
