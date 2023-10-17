@@ -10,7 +10,6 @@ from lib.sound import Audio
 from lib.speech_recognition import SpeechRecognizer
 from lib.chatgpt import ChatGPT
 from lib.tts import TTS
-from lib.spacy import chunk_words
 
 load_dotenv()
 os.environ['PA_ALSA_PLUGHW'] = '1'
