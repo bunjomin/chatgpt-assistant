@@ -2,16 +2,34 @@ import os
 import time
 import sys
 import asyncio
+import requests
+import io
+import wave
+import numpy as np
+import base64
 
-from chatgpt import ChatGPT
 from lib.sound import Audio
-from lib.tts import TTS
 from lib.speech_recognition import SpeechRecognizer
 
 async def shutdown(assistant):
     await asyncio.to_thread(Audio.play_sound_file, "quit")
     if assistant:
         await assistant.quit()
+
+def convert_24bit_wav_to_float32(audio_data):
+    # Step 1: Read the data as uint8
+    audio_bytes = np.frombuffer(audio_data, dtype=np.uint8)
+    
+    # Step 2: Convert groups of 3 bytes into 32-bit integers
+    audio_int32 = np.zeros(len(audio_bytes) // 3, dtype=np.int32)
+    audio_int32 += audio_bytes[::3].astype(np.int32) << 8  # Shift left by 8 bits for the least significant byte
+    audio_int32 += audio_bytes[1::3].astype(np.int32) << 16  # Shift left by 16 bits for the middle byte
+    audio_int32 += (audio_bytes[2::3].astype(np.int32) - 128) << 24  # Subtract 128 (to make it signed) and shift left by 24 bits for the most significant byte
+    
+    # Step 3: Normalize to get float32 values in the range -1 to 1
+    audio_float32 = audio_int32 / (2**23 - 1)
+    
+    return audio_float32
 
 class Assistant:
     _QUIT_PHRASES = ["stop", "quit", "exit", "shut down"]
@@ -26,22 +44,53 @@ class Assistant:
 
     def __init__(self):
         self._awake = False
-        api_key = os.environ.get('OPENAI_API_KEY')
-        if not api_key or len(api_key) == 0:
-            raise ValueError("You must provide an OpenAI API key with the environment variable OPENAI_API_KEY.")
+        api_key = os.environ.get('ASSISTANT_API_KEY')
+        self._api_base = os.environ.get('ASSISTANT_API_BASE')
         self._api_key = api_key
-        self.tts = TTS()
-        self.chat_gpt = ChatGPT({ "api_key": f"{self._api_key}" })
         self.speech_recognizer = SpeechRecognizer()
         self._last_speech_timestamp = None
+        self.current_conversation = []
 
     async def chat(self, text):
-        self._last_speech_timestamp = None
-        response = await asyncio.to_thread(self.chat_gpt.chat, text)
-        print(f"\nRESPONSE: {response}")
-        await self.tts.text_to_speech(response)
-        await asyncio.to_thread(Audio.play_sound_file, "awake")
-        self._last_speech_timestamp = round(time.time(), 2)
+        try:
+            self._last_speech_timestamp = None
+            self.current_conversation.append({
+                "role": "user",
+                "content": text,
+            })
+            body = { "messages": self.current_conversation }
+            headers = { "authorization": f"bearer {self._api_key}" }
+            raw_response = requests.post(f"{self._api_base}/tts", json=body, headers=headers)
+            raw_response.raise_for_status()
+            raw_response_text = raw_response.headers.get("x-response")
+            response_text = base64.b64decode(raw_response_text).decode("utf-8")
+            print(f"received response: {response_text}")
+            if not response_text or not len(response_text):
+                self._last_speech_timestamp = round(time.time(), 2)
+                return
+            wav_data = io.BytesIO(raw_response.content)
+            with wave.open(wav_data, "rb") as wf:
+                sample_width = wf.getsampwidth() * 8
+                print(f"sample_width: {sample_width}")
+                n_frames = wf.getnframes()
+                audio_data = wf.readframes(n_frames)
+                audio_array = np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32767.0  # Convert to float32
+                sample_rate = wf.getframerate()
+
+            await asyncio.to_thread(Audio.play_audio, audio_array, sample_rate, 0.6)
+
+            self.current_conversation.append({
+                "role": "assistant",
+                "content": response_text,
+            })
+
+            await asyncio.to_thread(Audio.play_sound_file, "awake")
+            self._last_speech_timestamp = round(time.time(), 2)
+
+        except Exception as e:
+            print(f"chat: Exception: {e}")
+            self._last_speech_timestamp = round(time.time(), 2)
+            return
 
     async def sleep(self):
         await asyncio.to_thread(Audio.play_sound_file, "sleep")

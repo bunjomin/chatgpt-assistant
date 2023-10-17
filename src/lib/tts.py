@@ -3,11 +3,12 @@ import asyncio
 import requests
 import zipfile
 import torch
+
 from TTS.api import TTS as TextToSpeech
 
 from lib.sound import Audio
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
+device = "cpu" if torch.cuda.is_available() else "cpu"
 
 _DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -32,6 +33,7 @@ class TTS:
         model_config = os.path.normpath(os.path.join(self._PATHS.VITS, "config.json"))
 
         self.tts = TextToSpeech(model_path=model_path, config_path=model_config, progress_bar=False).to(self.device)
+        TextToSpeech()
     
     def download_and_unzip(self):
         """
@@ -50,9 +52,12 @@ class TTS:
         os.remove(zip_path)
         os.rename(os.path.join(self._PATHS.MODELS, "tts_models--en--ljspeech--vits"), self._PATHS.VITS)
 
-    async def text_to_speech(self, text):
+    async def text_to_speech(self, text, play=True):
         wav = self.tts.tts(text)
-        await asyncio.to_thread(Audio.play_audio, wav, 22050, 0.6)
+        if play:
+            await asyncio.to_thread(Audio.play_audio, wav, 22050, 0.6)
+        else:
+            return wav
         # q = asyncio.Queue()
         # for chunk in chunk_words(text, 12, 6):
         #     wav = self.tts.tts(chunk)

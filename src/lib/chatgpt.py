@@ -34,7 +34,7 @@ class ChatGPT:
             "Authorization": f"Bearer {api_key}",
         }
 
-        if len(messages):
+        if messages and len(messages):
             self.messages = messages
         else:
             self.messages = copy.copy(self.__context_messages)
@@ -53,8 +53,10 @@ class ChatGPT:
         try:
             r = requests.post(f"{ChatGPT.__API_BASE}/chat/completions", headers=self.headers, json=body)
         # Brutally stupid.
-        except Exception:
+        except Exception as e:
+            print(f"e: {e}")
             return "Something went wrong. Please try again."
+
         if r.status_code != 200: return "Something went wrong. Please try again."
 
         response = r.json()

@@ -9,3 +9,5 @@ src/data/models/*
 !src/data/models/.gitkeep
 
 __pycache__
+
+*.wav
