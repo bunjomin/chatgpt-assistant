@@ -1,9 +1,10 @@
-import requests
+import aiohttp
 import copy
+import json
 
-# TODO:
-# Handle streamed responses so we can start
-# doing TTS more quickly.
+class ChatGeneratorEnd(Exception):
+    def __init__(self, final_value):
+        self.final_value = final_value
 
 class ChatGPT:
     __context_messages = [
@@ -39,34 +40,58 @@ class ChatGPT:
         else:
             self.messages = copy.copy(self.__context_messages)
 
-    def chat(self, message):
+    async def chat(self, message, raiseFullResult=False):
         self.messages.append({
             "role": "user",
             "content": message,
         })
         body = {
-            "model": self.model,
-            "top_p": self.top_p,
-            "max_tokens": self.max_tokens,
-            "messages": self.messages,
+            'messages': self.messages,
+            'model': self.model,
+            'max_tokens': self.max_tokens,
+            'top_p': self.top_p,
+            'stream': True,
         }
-        try:
-            r = requests.post(f"{ChatGPT.__API_BASE}/chat/completions", headers=self.headers, json=body)
-        # Brutally stupid.
-        except Exception as e:
-            print(f"e: {e}")
-            return "Something went wrong. Please try again."
+        
+        headers = self.headers
 
-        if r.status_code != 200: return "Something went wrong. Please try again."
+        async with aiohttp.ClientSession() as session:
+            async with session.post(f"{ChatGPT.__API_BASE}/chat/completions", headers=headers, json=body) as res:
+                try:
+                    if not res.content:
+                        raise ValueError("No response body")
+                    
+                    chunks = []
+                    async for chunk in res.content.iter_any():
+                        stringed = chunk.decode()
+                        split_string = stringed.split("data: ")
+                        split = split_string[1:] if len(split_string) > 1 else None
+                        
+                        if not split:
+                            continue
+                        if split == "[DONE]":
+                            break
+                        
+                        for line in split:
+                            try:
+                                parsed = json.loads(line)
+                            except json.JSONDecodeError:
+                                parsed = None
+                            
+                            if not parsed:
+                                continue
+                            if parsed.get("choices", [{}])[0].get("finish_reason", None) is not None:
+                                break
+                            delta = parsed.get("choices", [{}])[0].get("delta", {}).get("content", None)
+                            if not delta:
+                                continue
+                            chunks.append(delta)
+                            yield delta
+                except Exception as e:
+                    print(f"chat: Exception: {e}")
 
-        response = r.json()
-        message_response = response["choices"][0]["message"]
-        if not message_response or not message_response["content"]: return None
-        self.messages.append({
-            "role": "assistant",
-            "content": message_response["content"],
-        })
-        return message_response["content"]
+        if raiseFullResult:
+            raise ChatGeneratorEnd(chunks)
 
     def reset(self):
         self.messages = copy.copy(self.__context_messages)

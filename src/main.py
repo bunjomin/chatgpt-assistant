@@ -20,16 +20,11 @@ async def shutdown(assistant):
         await assistant.quit()
 
 def convert_24bit_wav_to_float32(audio_data):
-    # Step 1: Read the data as uint8
     audio_bytes = np.frombuffer(audio_data, dtype=np.uint8)
-    
-    # Step 2: Convert groups of 3 bytes into 32-bit integers
     audio_int32 = np.zeros(len(audio_bytes) // 3, dtype=np.int32)
     audio_int32 += audio_bytes[::3].astype(np.int32) << 8  # Shift left by 8 bits for the least significant byte
     audio_int32 += audio_bytes[1::3].astype(np.int32) << 16  # Shift left by 16 bits for the middle byte
     audio_int32 += (audio_bytes[2::3].astype(np.int32) - 128) << 24  # Subtract 128 (to make it signed) and shift left by 24 bits for the most significant byte
-    
-    # Step 3: Normalize to get float32 values in the range -1 to 1
     audio_float32 = audio_int32 / (2**23 - 1)
     
     return audio_float32
@@ -55,16 +50,31 @@ class Assistant:
         self._last_speech_timestamp = None
         self.current_conversation = []
 
+    async def resume(self):
+        self.speech_recognizer.resume()
+        self._last_speech_timestamp = round(time.time(), 2)
+        await asyncio.to_thread(Audio.play_sound_file, "awake")
+
     async def chat(self, text):
         try:
             self._last_speech_timestamp = None
             self.speech_recognizer.pause()
-            response = await asyncio.to_thread(self.chat_gpt.chat, text)
+            response = None
 
-            if not isinstance(response, str) or not response or not len(response):
-                self._last_speech_timestamp = round(time.time(), 2)
-                self.speech_recognizer.resume()
-                return
+            chunks = []
+            async for chunk in self.chat_gpt.chat(text):
+                chunks.append(chunk)
+                if chunk.strip().endswith(",") or chunk.strip().endswith(".") or chunk.strip().endswith(";"):
+                    joined = ''.join(chunks)
+                    print(f"playing segment: {joined}")
+                    self.tts.text_to_speech(joined)
+                    chunks.clear()
+        
+            if len(chunks) > 0:
+                joined = ''.join(chunks)
+                print(f"playing final segment: {joined}")
+                self.tts.text_to_speech(joined)
+                chunks.clear()
 
             self.current_conversation.append({
                 "role": "user",
@@ -79,13 +89,11 @@ class Assistant:
                 "content": response,
             })
 
-            self.speech_recognizer.resume()
-            await asyncio.to_thread(Audio.play_sound_file, "awake")
-            self._last_speech_timestamp = round(time.time(), 2)
+            await self.resume()
 
         except Exception as e:
             print(f"chat: Exception: {e}")
-            self._last_speech_timestamp = round(time.time(), 2)
+            await self.resume()
             return
 
     async def sleep(self):
@@ -133,7 +141,6 @@ class Assistant:
                 if self._last_speech_timestamp is None:
                     continue
                 if self.speech_recognizer.is_capturing():
-                    print("Currently capturing...")
                     self._last_speech_timestamp = round(time.time(), 2)
                     continue
                 time_since_last_speech = round(round(time.time(), 2) - self._last_speech_timestamp, 2)
