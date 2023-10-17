@@ -2,11 +2,7 @@ import os
 import time
 import sys
 import asyncio
-import requests
-import io
-import wave
 import numpy as np
-import base64
 from dotenv import load_dotenv
 
 from lib.sound import Audio
@@ -15,6 +11,7 @@ from lib.chatgpt import ChatGPT
 from lib.tts import TTS
 
 load_dotenv()
+os.environ['PA_ALSA_PLUGHW'] = '1'
 
 async def shutdown(assistant):
     await asyncio.to_thread(Audio.play_sound_file, "quit")

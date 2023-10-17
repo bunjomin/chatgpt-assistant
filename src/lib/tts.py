@@ -1,7 +1,6 @@
 import os
 import requests
 import sounddevice as sd
-import torch
 
 from piper import PiperVoice
 
@@ -27,7 +26,7 @@ class TTS:
         model_path = os.path.normpath(os.path.join(self._PATHS.AMY, "en_US-amy-medium.onnx"))
         config_path = os.path.normpath(os.path.join(self._PATHS.AMY, "config.json"))
 
-        self.tts = PiperVoice.load(model_path, config_path, use_cuda=torch.cuda.is_available())
+        self.tts = PiperVoice.load(model_path, config_path, use_cuda=False)
     
     def download_and_unzip(self):
         response = requests.get(self._URLS.AMY_MODEL, stream=True)
