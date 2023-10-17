@@ -6,10 +6,10 @@ import numpy as np
 import re
 from dotenv import load_dotenv
 
-from lib.sound import Audio
-from lib.speech_recognition import SpeechRecognizer
-from lib.chatgpt import ChatGPT
-from lib.tts import TTS
+from src.lib.sound import Audio
+from src.lib.speech_recognition import SpeechRecognizer
+from src.lib.chatgpt import ChatGPT
+from src.lib.tts import TTS
 
 load_dotenv()
 os.environ["PA_ALSA_PLUGHW"] = "1"
