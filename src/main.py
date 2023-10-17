@@ -81,9 +81,6 @@ class Assistant:
                 "content": text,
             })
 
-            for chunk in chunk_words(response, 16, 4):
-                await asyncio.to_thread(self.tts.text_to_speech, chunk)
-
             self.current_conversation.append({
                 "role": "assistant",
                 "content": response,
@@ -111,6 +108,7 @@ class Assistant:
         for quit_phrase in self._QUIT_PHRASES:
             if Assistant.jaccard_similarity(quit_phrase, text) > self._SIMILARITY_THRESHOLD:
                 await self.sleep()
+                self.current_conversation = []
                 self.chat_gpt.reset()
                 return
         await self.chat(text)
