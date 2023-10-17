@@ -7,9 +7,12 @@ import io
 import wave
 import numpy as np
 import base64
+from dotenv import load_dotenv
 
 from lib.sound import Audio
 from lib.speech_recognition import SpeechRecognizer
+
+load_dotenv()
 
 async def shutdown(assistant):
     await asyncio.to_thread(Audio.play_sound_file, "quit")
