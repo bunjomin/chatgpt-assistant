@@ -49,11 +49,11 @@ class Assistant:
         self._awake = False
         api_key = os.environ.get('OPENAI_API_KEY')
         self._api_key = api_key
+        self.chat_gpt = ChatGPT({ "api_key": self._api_key })
+        self.tts = TTS()
         self.speech_recognizer = SpeechRecognizer()
         self._last_speech_timestamp = None
         self.current_conversation = []
-        self.tts = TTS()
-        self.chat_gpt = ChatGPT({ "api_key": self._api_key })
 
     async def chat(self, text):
         try:

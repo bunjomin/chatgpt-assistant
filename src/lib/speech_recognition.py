@@ -1,10 +1,20 @@
+import os
 import sys
 import sounddevice as sd
 import json
 import asyncio
 
 from typing import List, Callable
-from vosk import Model, KaldiRecognizer
+from vosk import Model, KaldiRecognizer, SetLogLevel
+
+class HiddenPrints:
+    def __enter__(self):
+        self._original_stdout = sys.stdout
+        sys.stdout = open(os.devnull, 'w')
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        sys.stdout.close()
+        sys.stdout = self._original_stdout
 
 class SpeechRecognizer:
     """Input class for handling audio input"""
@@ -14,12 +24,12 @@ class SpeechRecognizer:
         default_input_device = sd.default.device[0]
         device_info = sd.query_devices(default_input_device, "input")
         sample_rate = int(device_info["default_samplerate"])
-        
+        self._capturing = False
+        self._loop = None
+        SetLogLevel(-1)
         self.model = Model(lang="en-us")
         self._input_stream = sd.RawInputStream(samplerate=sample_rate, blocksize=8000, dtype="int16", channels=1, callback=self._callback)
         self.rec = KaldiRecognizer(self.model, sample_rate)
-        self._capturing = False
-        self._loop = None
 
     def _int_or_str(self, text):
         """Helper function for argument parsing."""
