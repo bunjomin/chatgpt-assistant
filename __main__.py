@@ -81,23 +81,21 @@ class Assistant:
             self.speech_recognizer.pause()
             full_response = []
             chunks = []
+            asyncio.create_task(self.screen.write(["## Thinking..."]))
+            wrote = 0
             async for chunk in self.chat_gpt.chat(text):
                 chunks.append(chunk)
+                wrote += 1
                 if (
                     len(chunks) > 10
                     and not re.match(r"\d+[.,]$", chunk.strip())
                     and not re.match(r"\d+[.,]$", chunks[-1].strip())
                 ):
-                    for terminator in [",", ".", ";", "and", "or"]:
+                    for terminator in [",", ".", "?", "!", ";", "and", "or"]:
                         if chunk.strip().endswith(terminator):
                             joined = "".join(chunks)
                             logging.debug(f"playing segment: {joined}")
                             full_response.append(joined)
-                            to_write = ["## GPT:"]
-                            for line in full_response:
-                                line = line.replace("\n", "\n### ")
-                                to_write.append(f"### {line}")
-                            asyncio.create_task(self.screen.write(to_write))
                             await asyncio.to_thread(self.tts.text_to_speech, joined)
                             chunks = []
 
@@ -105,13 +103,19 @@ class Assistant:
                 joined = "".join(chunks)
                 logging.debug(f"playing final segment: {joined}")
                 full_response.append(joined)
-                to_write = ["## GPT:"]
-                for line in full_response:
-                    line = line.replace("\n", "\n### ")
-                    to_write.append(f"### {line}")
-                asyncio.create_task(self.screen.write(to_write))
                 await asyncio.to_thread(self.tts.text_to_speech, joined)
                 chunks = []
+
+            print(f"full response: {full_response}")
+
+            asyncio.create_task(
+                self.screen.write(
+                    [
+                        "## GPT:",
+                        "\n### " + "\n".join(full_response).replace("\n", "\n### "),
+                    ]
+                )
+            )
 
             self.current_conversation.append(
                 {

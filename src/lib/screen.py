@@ -18,6 +18,27 @@ class Screen:
         self.console.clear()
         self.console.print(Markdown(text, justify="left"), justify="left")
 
+    async def append(self, message, messages):
+        control_sequences = ["#", "**", "*", "[](", "__", "_"]
+        width, height = os.get_terminal_size()
+        x = len(messages[-1])
+        self.console.print(
+            self.control.move_to(
+                x,
+                (height // 2) - max(len(messages), len("".join(messages).split("\n"))),
+            ),
+            justify="left",
+        )
+        for j, char in enumerate(message):
+            sequence = next(
+                (seq for seq in control_sequences if char == seq),
+                None,
+            )
+            if sequence:
+                continue
+            await asyncio.sleep(0.01)
+            self.console.print(char, justify="left")
+
     async def write(self, messages):
         try:
             control_sequences = ["#", "**", "*", "[](", "__", "_"]
