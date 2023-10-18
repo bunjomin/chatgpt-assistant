@@ -1,6 +1,7 @@
 import aiohttp
 import copy
 import json
+import logging
 
 
 class ChatGeneratorEnd(Exception):
@@ -60,7 +61,7 @@ class ChatGPT:
 
         headers = self.headers
 
-        print(f"requesting completion for: {self.messages[-1].get('content')}")
+        logging.debug(f"requesting completion for: {self.messages[-1].get('content')}")
 
         async with aiohttp.ClientSession() as session:
             async with session.post(
@@ -109,7 +110,7 @@ class ChatGPT:
                             chunks.append(delta)
                             yield delta
                 except Exception as e:
-                    print(f"chat: Exception: {e}")
+                    logging.debug(f"chat: Exception: {e}")
 
         if raiseFullResult:
             raise ChatGeneratorEnd(chunks)

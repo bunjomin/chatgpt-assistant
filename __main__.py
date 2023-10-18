@@ -4,15 +4,24 @@ import sys
 import asyncio
 import numpy as np
 import re
+import logging
 from dotenv import load_dotenv
 
 from src.lib.sound import Audio
 from src.lib.speech_recognition import SpeechRecognizer
 from src.lib.chatgpt import ChatGPT
 from src.lib.tts import TTS
+from src.lib.screen import Screen
 
+sys.stderr = open(os.devnull, "w")
+logging.basicConfig(level=logging.ERROR)
 load_dotenv()
 os.environ["PA_ALSA_PLUGHW"] = "1"
+
+WELCOME_MESSAGES = [
+    "## Welcome to GPT Assistant",
+    '#### Say _"Okay GPT"_ to wake me up.',
+]
 
 
 async def shutdown(assistant):
@@ -55,6 +64,7 @@ class Assistant:
         self._api_key = api_key
         self.chat_gpt = ChatGPT({"api_key": self._api_key})
         self.tts = TTS()
+        self.screen = Screen()
         self.speech_recognizer = SpeechRecognizer()
         self._last_speech_timestamp = None
         self.current_conversation = []
@@ -66,9 +76,10 @@ class Assistant:
 
     async def chat(self, text):
         try:
+            await self.screen.write([f'### "{text}"'])
             self._last_speech_timestamp = None
             self.speech_recognizer.pause()
-            full_response = ""
+            full_response = []
             chunks = []
             async for chunk in self.chat_gpt.chat(text):
                 chunks.append(chunk)
@@ -80,16 +91,26 @@ class Assistant:
                     for terminator in [",", ".", ";", "and", "or"]:
                         if chunk.strip().endswith(terminator):
                             joined = "".join(chunks)
-                            print(f"playing segment: {joined}")
+                            logging.debug(f"playing segment: {joined}")
+                            full_response.append(joined)
+                            to_write = ["## GPT:"]
+                            for line in full_response:
+                                line = line.replace("\n", "\n### ")
+                                to_write.append(f"### {line}")
+                            asyncio.create_task(self.screen.write(to_write))
                             await asyncio.to_thread(self.tts.text_to_speech, joined)
-                            full_response += joined
                             chunks = []
 
             if len(chunks) > 0:
                 joined = "".join(chunks)
-                print(f"playing final segment: {joined}")
+                logging.debug(f"playing final segment: {joined}")
+                full_response.append(joined)
+                to_write = ["## GPT:"]
+                for line in full_response:
+                    line = line.replace("\n", "\n### ")
+                    to_write.append(f"### {line}")
+                asyncio.create_task(self.screen.write(to_write))
                 await asyncio.to_thread(self.tts.text_to_speech, joined)
-                full_response += joined
                 chunks = []
 
             self.current_conversation.append(
@@ -102,14 +123,14 @@ class Assistant:
             self.current_conversation.append(
                 {
                     "role": "assistant",
-                    "content": full_response,
+                    "content": " ".join(full_response),
                 }
             )
 
             await self.resume()
 
         except Exception as e:
-            print(f"chat: Exception: {e}")
+            logging.error(f"chat: Exception: {e}")
             await self.resume()
             return
 
@@ -117,14 +138,16 @@ class Assistant:
         await asyncio.to_thread(Audio.play_sound_file, "sleep")
         self._awake = False
         self._last_speech_timestamp = None
+        await self.screen.write(WELCOME_MESSAGES)
 
     async def awaken(self):
         await asyncio.to_thread(Audio.play_sound_file, "awake")
         self._awake = True
         self._last_speech_timestamp = round(time.time(), 2)
+        await self.screen.write(["### Speak now..."])
 
     async def handle_awake(self, text):
-        print(f"awake text: {text}")
+        logging.debug(f"awake text: {text}")
         for quit_phrase in self._QUIT_PHRASES:
             if (
                 Assistant.jaccard_similarity(quit_phrase, text)
@@ -175,41 +198,43 @@ class Assistant:
                     round(time.time(), 2) - self._last_speech_timestamp, 2
                 )
                 if time_since_last_speech > 4.0 and self._awake:
-                    print(
+                    logging.debug(
                         f"Sleeping due to inactivity ({time_since_last_speech} seconds)"
                     )
                     await self.sleep()
         except asyncio.CancelledError:
-            print("check_awake_status: asyncio.CancelledError")
+            logging.error("check_awake_status: asyncio.CancelledError")
             return
         except Exception as e:
-            print(f"check_awake_status: Exception: {e}")
+            logging.error(f"check_awake_status: Exception: {e}")
             return
 
     async def quit(self):
         for task in asyncio.all_tasks():
-            print(f"task: {task}")
+            logging.debug(f"task: {task}")
             task.cancel()
             try:
                 await task
             except asyncio.CancelledError:
                 pass
         self.speech_recognizer.kill()
+        self.screen.quit()
         sys.exit()
 
     async def start(self):
-        print("Starting assistant...\n")
+        logging.debug("Starting assistant...\n")
         try:
+            await self.screen.write(WELCOME_MESSAGES)
             await asyncio.to_thread(Audio.play_sound_file, "startup")
             await asyncio.gather(
                 self.check_awake_status(),
                 self.speech_recognizer.start([self.handle_speech]),
             )
         except asyncio.CancelledError:
-            print("start: asyncio.CancelledError")
+            logging.error("start: asyncio.CancelledError")
             await self.quit()
         except Exception as e:
-            print(f"start: Exception: {e}")
+            logging.error(f"start: Exception: {e}")
             await self.quit()
             return
 
@@ -220,10 +245,10 @@ if __name__ == "__main__":
         assistant = Assistant()
         asyncio.run(assistant.start())
     except KeyboardInterrupt:
-        print("KeyboardInterrupt detected. Shutting down.")
+        logging.error("KeyboardInterrupt detected. Shutting down.")
         if assistant:
             asyncio.run(shutdown(assistant))
     except Exception as e:
-        print(f"main Exception: {e}")
+        logging.error(f"main Exception: {e}")
         if assistant:
             asyncio.run(shutdown(assistant))

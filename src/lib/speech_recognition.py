@@ -3,6 +3,7 @@ import sys
 import sounddevice as sd
 import json
 import asyncio
+import logging
 
 from typing import List, Callable
 from vosk import Model, KaldiRecognizer, SetLogLevel
@@ -49,13 +50,13 @@ class SpeechRecognizer:
     def _callback(self, indata, frames, time, status):
         """This is called (from a separate thread) for each audio block."""
         if status:
-            print(status, file=sys.stderr)
+            logging.debug(status, file=sys.stderr)
         b = bytes(indata)
         loop = self._loop
         asyncio.run_coroutine_threadsafe(self.q.put(b), loop)
 
     def kill(self):
-        print("Killing speech recognizer...")
+        logging.debug("Killing speech recognizer...")
         self._capturing = False
         self._input_stream.abort()
 
@@ -70,7 +71,7 @@ class SpeechRecognizer:
         self._input_stream.start()
 
     async def start(self, subscribers: List[Callable]):
-        print("ASR starting...")
+        logging.debug("ASR starting...")
         try:
             self._loop = asyncio.get_event_loop()
             self._input_stream.start()
@@ -105,10 +106,10 @@ class SpeechRecognizer:
                         continue
                     self._capturing = True
         except asyncio.CancelledError as e:
-            print(f"asr asyncio.CancelledError: {e}")
+            logging.debug(f"asr asyncio.CancelledError: {e}")
             self.kill()
             return
         except Exception as e:
-            print(f"asr Exception: {e}")
+            logging.debug(f"asr Exception: {e}")
             self.kill()
             return
